@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -Wall                  #-}
+{-# OPTIONS_GHC -Wall                   #-}
 {-# LANGUAGE CPP                        #-}
 {-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DeriveFunctor              #-}
@@ -21,7 +21,7 @@
 -- Maintainer:  Nickolay Kudasov <nickolay@getshoptv.com>
 -- Stability:   experimental
 --
--- Validate JSON values with Swagger Schema.
+-- Validate JSON values with OpenAPI Schema.
 module Data.OpenApi.Internal.Schema.Validation where
 
 import           Prelude                             ()
@@ -86,7 +86,7 @@ validateToJSONWithPatternChecker checker = validateJSONWithPatternChecker checke
     (defs, sch) = runDeclare (declareSchema (Proxy :: Proxy a)) mempty
 
 -- | Pretty print validation errors
--- together with actual JSON and Swagger Schema
+-- together with actual JSON and OpenAPI Schema
 -- (using 'encodePretty').
 --
 -- >>> import Data.Aeson as Aeson
@@ -107,7 +107,7 @@ validateToJSONWithPatternChecker checker = validateJSONWithPatternChecker checke
 --     "name": "John"
 -- }
 -- <BLANKLINE>
--- Swagger Schema:
+-- OpenAPI Schema:
 -- {
 --     "properties": {
 --         "name": {
@@ -124,7 +124,7 @@ validateToJSONWithPatternChecker checker = validateJSONWithPatternChecker checke
 --     "type": "object"
 -- }
 -- <BLANKLINE>
--- Swagger Description Context:
+-- OpenAPI Description Context:
 -- {
 --     "Phone": {
 --         "properties": {
@@ -151,17 +151,17 @@ renderValidationErrors f x =
       , "JSON value:"
       , ppJSONString (toJSON x)
       , ""
-      , "Swagger Schema:"
+      , "OpenAPI Schema:"
       , ppJSONString (toJSON schema_)
       , ""
-      , "Swagger Description Context:"
+      , "OpenAPI Description Context:"
       , ppJSONString (toJSON refs_)
       ]
   where
     ppJSONString = TL.unpack . TL.decodeUtf8 . encodePretty
     (refs_, schema_) = runDeclare (declareSchema (Proxy :: Proxy a)) mempty
 
--- | Validate JSON @'Value'@ against Swagger @'Schema'@.
+-- | Validate JSON @'Value'@ against OpenAPI @'Schema'@.
 --
 -- prop> validateJSON mempty (toSchema (Proxy :: Proxy Int)) (toJSON (x :: Int)) == []
 --
@@ -170,7 +170,7 @@ renderValidationErrors f x =
 validateJSON :: Definitions Schema -> Schema -> Value -> [ValidationError]
 validateJSON = validateJSONWithPatternChecker (\_pattern _str -> True)
 
--- | Validate JSON @'Value'@ agains Swagger @'ToSchema'@ for a given value and pattern checker.
+-- | Validate JSON @'Value'@ agains OpenAPI @'ToSchema'@ for a given value and pattern checker.
 --
 -- For validation without patterns see @'validateJSON'@.
 validateJSONWithPatternChecker :: (Pattern -> Text -> Bool) -> Definitions Schema -> Schema -> Value -> [ValidationError]
@@ -302,7 +302,7 @@ validateWithSchemaRef :: Referenced Schema -> Value -> Validation s ()
 validateWithSchemaRef (Ref ref)  js = withRef ref $ \sch -> sub sch (validateWithSchema js)
 validateWithSchemaRef (Inline s) js = sub s (validateWithSchema js)
 
--- | Validate JSON @'Value'@ with Swagger @'Schema'@.
+-- | Validate JSON @'Value'@ with OpenAPI @'Schema'@.
 validateWithSchema :: Value -> Validation Schema ()
 validateWithSchema val = do
   validateSchemaType val
@@ -422,13 +422,13 @@ validateObject o = withSchema $ \sch ->
 
     unknownProperty :: Text -> Validation s a
     unknownProperty pname = invalid $
-      "property " <> show pname <> " is found in JSON value, but it is not mentioned in Swagger schema"
+      "property " <> show pname <> " is found in JSON value, but it is not mentioned in OpenAPI schema"
 
 validateEnum :: Value -> Validation Schema ()
 validateEnum val = do
   check enum_ $ \xs ->
     when (val `notElem` xs) $
-      invalid ("expected one of " ++ show (encode xs) ++ " but got " ++ show val)
+      invalid ("expected one of " ++ show (encode xs) ++ " but got " ++ show (encode val))
 
 -- | Infer schema type based on used properties.
 --
@@ -484,9 +484,9 @@ validateSchemaType val = withSchema $ \sch ->
       res <- forM variants $ \var ->
         (True <$ validateWithSchemaRef var val) <|> (return False)
       case length $ filter id res of
-        0 -> invalid $ "Value not valid under any of 'oneOf' schemas: " ++ show val
+        0 -> invalid $ "Value not valid under any of 'oneOf' schemas: " ++ show (encode val)
         1 -> valid
-        _ -> invalid $ "Value matches more than one of 'oneOf' schemas: " ++ show val
+        _ -> invalid $ "Value matches more than one of 'oneOf' schemas: " ++ show (encode val)
     (view allOf -> Just variants) -> do
       -- Default semantics for Validation Monad will abort when at least one
       -- variant does not match.
